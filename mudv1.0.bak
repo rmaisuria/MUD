@@ -34,4 +34,3 @@
             (loop rid))))))
 
 (startgame 1)
-;;;;;;
