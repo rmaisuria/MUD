@@ -1,122 +1,46 @@
 #lang racket
 
-;(apple store maze)
-
 (require srfi/1)
 (require srfi/13)
 (require srfi/48)
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;Data Structure;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-
-;object description, of items that can be picked up
-(define objects  '((1 "iphone" )
-                   (2 "ipad" )
-                   (3 "Macbook" )))
-
-;; Rooms description
-(define descriptions '((1 "You are in then entrance.")
-                       (2 "You are in the headphones section.")
-                       (3 "You are in the checkout.")
-                       (4 "You are in the products section.")
-                       (5 "You are in the store room.")
-                       (6 "You are near the exit")))
-
-
-;; Lists of pairs. First we have the user's
-;entry and second we have what words should understand with that entry
-( define look '((( directions ) look ) (( look ) look ) (( examine room ) look )))
-( define quit '((( exit game ) quit ) (( quit game ) quit ) (( exit ) quit ) (( quit ) quit )))
-( define pick '((( get ) pick ) (( pickup ) pick ) (( pick ) pick )))
-( define put '((( put ) drop ) (( drop ) drop ) (( place ) drop ) (( remove ) drop )))
-( define inventory '((( inventory ) inventory ) (( bag ) inventory )))
-;( define lookup '((( inventory ) inventory ) (( bag ) inventory )))
-
-;defines all the actions available when games runs
-( define actions `(,@look ,@quit ,@pick ,@put ,@inventory  ))
-;all the different choices of directions the user can choose
-(define decisiontable `((1 ((north) 2) ,@actions)
-                        (2 ((south) 1) ((north east) 3) ((north west) 4) ,@actions)
-                        (3 ((west) 4) ((south west) 2) ((north east) 5) ,@actions)
-                        (4 ((south east) 2) ((east) 3) ,@actions)
-                        (5 ((south west) 3) ,@actions)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;functions;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(define (get-direction id)
-  (printf "~a\n" (car (assq-ref descriptions id)))
-  ;; Describe objects that are present in the room
-  (display-objects objectdb id)
-  (printf "> "))
-;; Maps the parameter to a list of atoms and then joins it in a string with separator " " 
-(define (slist->string l)
+( define objects '((1 "a silver dagger" )
+                   (1 "a gold coin" )))
+ (define (slist->string l)
   (string-join (map symbol->string l)))
 
-
-(define (get-directions id)
-  (let ((record (assq id decisiontable)))
-    (let* ((result (filter (lambda (n) (number? (second n))) (cdr record)))
-           (n (length result)))
-      (cond ((= 0 n)
-             (printf "You appear to have entered the store room.\n"))
-            ((= 1 n)
-             (printf "You can see an exit to the ~a.\n" (slist->string (caar result))))
-            (else
-             (let* ((losym (map (lambda (x) (car x)) result))
-                    (lostr (map (lambda (x) (slist->string x)) losym)))
-               (printf "You can see exits to the ~a.\n" (string-join lostr " and "))))))))
+; ; the structure representing a maze of size NxM
+( struct maze ( N M tbl ))
+( define ( connections tbl c) ( dict-ref tbl c '()))
+( define ( connect! tbl c n )
+   ( dict-set! tbl c ( cons n ( connections tbl c )))
+   ( dict-set! tbl n ( cons c ( connections tbl n ))))
+( define ( connected? tbl a b) ( member a ( connections tbl b )))
 
 
-;; Retrieves the cdr of the first pair in assqlist where the car is equals to id
-(define (assq-ref assqlist id)
-  (cdr (assq id assqlist)))
-
-(define (assv-ref assqlist id)
-  (cdr (assv id assqlist)))
-
-(define (get-response id)
-  (car (assq-ref descriptions id)))
-
-(define (get-keywords id)
-  (let ((keys (assq-ref decisiontable id)))
-    (map (lambda (key) (car key)) keys)))
 
 
-;; outputs a list in the form: (0 0 0 2 0 0)
-(define (list-of-lengths keylist tokens)
-  (map 
-   (lambda (x)
-     (let ((set (lset-intersection eq? tokens x)))
-       ;; apply some weighting to the result
-       (* (/ (length set) (length x)) (length set))))
-   keylist))
+( define ( build-maze N M)
+   ( define tbl ( make-hash ))
+   ( define ( visited? tbl c) ( dict-has-key? tbl c ))
+   ( define ( neigbours c)
+      ( filter
+        ( match-lambda [( list i j) ( and ( <= 0 i (- N 1)) ( <= 0 j (- M 1)))])
+        ( for/list ([ d '((0 1) (0 -1) (-1 0) (1 0))]) ( map + c d ))))
+   
+   ( let move-to-cell ([ c ( list ( random N) ( random M ))])
+      ( for ([ n ( shuffle ( neigbours c ))] #:unless ( visited? tbl n ))
+         (connect! tbl c n)
+         ( move-to-cell n )))
+   =
+   ( maze N M tbl ))
 
-;; Returns the most probable input command
-;; Sorts the list of lengths in descending order and gets the first element(greatest)
-;; Checks if the list is not empty(returns #f if the greatest element is 0)
-;; Returns the index of the entry with the greatest weight, so it can be matched with the list of keywords later
-(define (index-of-largest-number list-of-numbers)
-  (let ((n (car (sort list-of-numbers >))))
-    (if (zero? n)
-        #f
-        (list-index (lambda (x) (eq? x n)) list-of-numbers))))
 
-;; Receives the id(current room number) and a list of symbols that represents the user input(tokens)
-;; Assigns to record a list with the possible actions for the current room
-;; Assigns to keylist a list with the valid keywords for the game
-;; By calling list-of-lengths, creates a list of lengths with the most probable commands and then decide which one is the most probable using index-of-largest-number
-;; If there is an index(prevent errors), retrieves the command that is present in that index inside the list record(list which contains the valid actions for the current room). Otherwise returns false
 
-(define (lookup id tokens)
-  (let* ((record (assv-ref decisiontable id))
-         (keylist (get-keywords id))
-         (index (index-of-largest-number (list-of-lengths keylist tokens))))
-    (if index 
-        (cadr (list-ref record index))
-        #f)))
 
-;; Displaying objects in the room and in inventory(Need to show cases when any is empty)
-
+(define X 10)
+(define Y 7)
+(define start '(0 0))
 
 ( define objectdb ( make-hash ))
 ( define inventorydb ( make-hash ))
@@ -132,6 +56,8 @@
      (add-object db (first r) (second r )))objects))
 (add-objects objectdb)
 
+
+
 (define ( display-objects db id )
   ( when ( hash-has-key? db id )
      ( let*((record( hash-ref db id ))
@@ -141,19 +67,6 @@
                 ( printf " You are carrying ~a. \n" output )
                 ( printf " You can see ~a. \n " output ))))))
 
-
-
-( define ( remove-object-from-room db id str )
-   ( when ( hash-has-key? db id )
-      ( let*(( record ( hash-ref db id ))
-             ( result ( remove ( lambda (x) ( string-suffix-ci? str x )) record ))
-             ( item ( lset-difference equal? record result )))
-         ( cond (( null? item )
-                 ( printf "I don ’t see that item in the room !\n" ))
-                ( else
-                  ( printf " Added ~a to your bag .\n" ( first item ))
-                  ( add-object inventorydb ' bag ( first item ))
-                  ( hash-set! db id result ))))))
 
 ( define ( remove-object-from-inventory db id str )
    ( when ( hash-has-key? db ' bag )
@@ -167,57 +80,124 @@
                   ( add-object objectdb id ( first item ))
                   ( hash-set! db ' bag result ))))))
 
-( define ( pick-item id input )
-   ( let(( item ( string-join ( cdr ( string-split input )))))
-      (remove-object-from-room objectdb id item )))
+ 
 
-( define ( put-item id input )
-   ( let (( item ( string-join ( cdr ( string-split input )))))
-      ( remove-object-from-inventory inventorydb id item )))
-( define ( display-inventory )
-   ( display-objects inventorydb ' bag ))
+(define m (build-maze X Y))
 
-(define (startgame initial-id)
-  (let loop ((id initial-id) (description #t))
-    (if description
-        (printf "~a\n> " (get-response id))
-        (printf "> "))
-    (let* ((input (read-line))
-           (string-tokens (string-tokenize input))
-           (tokens (map string->symbol string-tokens)))
-      (let ((response (lookup id tokens)))
-        (cond ((number? response)
-               (loop response #t))
-              ((eq? #f response)
-               (format #t "huh? I didn't understand that!\n")
-               (loop id #f))
-              
-              ((eq? response 'look)
-               (get-directions id)
-               (loop id #f))           
+( define ( paths start )
+   ( match-define ( maze X Y tbl ) m)
+   ( map ( lambda ( x)
+            ( let (( first ( map = start x ))
+                   ( second ( map < start x )))
+               ( cond [( car first )
+                       ( if ( cadr second ) ' down ' up )]
+                      [ else
+                        ( if ( car second ) ' right ' left )]) ))
+         ( connections tbl start )))
 
-              ((eq? response 'pick)
-               (pick-item id input)
-               (loop id #f))
+(define (find-path m p1 p2)
+  (match-define (maze N M tbl) m)
+  (define (alternatives p prev) (remove prev (connections tbl p)))
+  (define (dead-end? p prev) (empty? (alternatives p prev)))
+  (define ((next-turn route) p)
+    (define prev (car route))
+    (cond
+      [(equal? p p2) (cons p2 route)]
+      [(dead-end? p prev) '()]
+      [else (append-map (next-turn (cons p route)) 
+                        (alternatives p prev))])) 
+  (reverse 
+   (append-map (next-turn (list p1)) 
+               (alternatives p1 (list p1)))))
 
-              ((eq? response 'put)
-               (put-item id input)
-               (loop id #f))
 
-              ((eq? response 'remove-invent)
-               (remove-object-from-inventory id)
-               (loop id #f))
 
-              ((eq? response 'remove-room)
-               (remove-object-from-room id)
-               (loop id #f))
-              
-              ((eq? response 'inventory)
-               (display-inventory)
-               (loop id #f))
+( define ( move-x room fun )
+   ( cons ( car room ) ( map ( lambda ( x) ( fun x 1)) ( cdr room ))))
+( define ( move-y room fun )
+   ( cons ( fun ( car room ) 1) ( cdr room )))
+( define ( lookup room direction )
+   ( cond [( eq? direction ' down )
+           ( move-x room +)]
+          [( eq? direction ' up )
+           ( move-x room -)]
+          [( eq? direction ' left )
+           ( move-y room -)]
+          [( eq? direction ' right )
+           ( move-y room +)]))
 
-              ((eq? response 'quit)
-               (format #t "So Long, and the end.\n")
-               (exit)))))))
+(define (pickup-item from id input)
+  (if(eq? from 'bag)
+    (remove-object-from-inventory inventorydb id 'bag input)
+    (remove-object-from-inventory objectdb id 'room input)))
 
-(startgame 1)
+
+( define ( startgame room-id )
+   ( let loop (( rid room-id ))
+      ( show-maze m rid )
+      ( printf " You are in the ~a\n > "( hash-ref rooms rid ))
+      
+      ( let (( input ( read-line )))
+         ( cond [( eq? input 'quit )
+                 ( exit )])
+         ( cond [( eq? input 'pick )
+                 ( pickup-item rid input )])
+               
+        
+               
+         
+         
+         ( if ( member input ( paths rid ))
+              ( let (( direction ( lookup rid input )))
+                 ( cond (( equal? rid direction ) ( loop rid ))
+                        (( equal? direction ( list (- X 1)(- Y 1)))
+                         ( show-maze m direction )
+                         ( displayln " You have reached exit door .")
+                         ( exit ))
+                        
+                        ( else
+                          ( loop direction ))))
+              ( begin
+                 ( printf " huh? I didn ’t  huh? I didn ’t understand : ~a\n " input)
+                 ( loop rid ))))))
+
+
+( define room-type '( (0 " Entrance ")
+                      (1 " hall ")
+                      (2 " hallway ")
+                      (3 " corridor ")
+                      (4 " lobby " )
+                      (5 " hallway ")
+                      (6 " court " )
+                      (7 " pass " )))
+
+( define ( assq-ref assqlist id )
+   ( cadr ( assq id assqlist )))
+( define rooms ( make-hash ))
+( define ( room-allocator db types )
+   ( for (( j X ))
+      ( for (( i Y ))
+         ( hash-set! db ( list j i) ( assq-ref types ( random (- ( length types ) 1)))))))
+( room-allocator rooms room-type )
+
+(define (show-maze m pos )
+  (match-define (maze X Y tbl) m)
+  (for ([i X]) (display "+---"))
+  (displayln "+")
+  (for ([j Y])
+     (display "|")
+     (for ([ i (- X 0)])
+        (if ( equal? ( list i j ) pos )
+             ( display " *")
+             ( display "  " ))
+        (if ( connected? tbl ( list i j ) ( list (+ 1 i) j ))
+             ( display "  " )
+             ( display " |" )))
+     (newline )
+     (for ([i X])
+        (if ( connected? tbl ( list i j ) ( list i (+ j 1)))
+             (display "+   ")
+             (display "+---" )))
+     (displayln "+" )))
+
+(startgame start)
