@@ -6,8 +6,8 @@
 (require srfi/48)
 
 
-(define X 10)
-(define Y 7)
+(define X 5)
+(define Y 5)
 
 (define room-type '((0 "Entrance")
                     (1 "sand room")
@@ -117,9 +117,7 @@
      (displayln "+" )))
 
 
-(define start '(0 0))
- (define objectdb ( make-hash ))
- (define inventorydb ( make-hash ))
+ 
  (define ( add-object db id object )
   ( if ( hash-has-key? db id )
        ( let (( record ( hash-ref db id )))
@@ -180,6 +178,17 @@
 
 (define (display-inventory)
   (display-objects inventorydb 'bag))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(define objectdb (make-hash)) 
+(define inventorydb (make-hash)) 
+(define rooms (make-hash))
+(define m (build-maze X Y)) 
+(define key "")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 
 ;;;;;;;;;;;;;;;;key functions;;;;;;;;;;;;;;;;;;
 (define (ass-ref assqlist id x)
@@ -266,29 +275,55 @@
          (Y(random Y))
          (room-id (startpoint)))
   
-  (let loop ((id room-id) (description #t))
-    (if description
-       (printf "~a\n> " (get-response id))
-        (printf "> "))
-    (let* ((input (read-line))
-          (string-tokens (string-tokenize input))
-           (tokens (map string->symbol string-tokens)))
-      (let ((response (lookup id tokens)))
-        (cond ((number? response)
-               (loop response #t))
-              
+    (let loop ((rid room-id))
+      (show-maze m rid)
+      (printf "You are in the ~a \n>" (hash-ref rooms rid))
+      (let* ((input (read-line))          
+             (string-tokens (string-tokenize input))
+             (tokens (map string->symbol string-tokens))
+             (response (lookup rid tokens cadr))) 
+        (cond ((eq? response 'direction)
+               (let* ((direction (lookup rid tokens caar)) 
+                      (newlocation (look rid direction))) 
+                 (cond((member direction (paths rid)) 
+                       (cond ((equal? newlocation (list (- X 1)(- Y 1)))
+                              (cond ((not (door key))
+                                     (printf "It seems that you don't have the key to open the gate. \n")
+                                     (loop newlocation))
+                                    (else
+                                     (printf "You used the key to open the gate. You are free! \n")
+                                     (exit))))
+                         (else
+                          (loop newlocation))))
+   
+                      (else 
+                       (printf "You can not go that way!\n")
+                       (loop rid)))))
+            
               ((eq? #f response)
-              (format #t "huh? I didn't understand that!\n")
-               (loop id #f))
-             
-              ((eq? response 'look)
-               (get-directions id)
-              (loop id #f))
-              
-              (eq? response 'quit)
-               (format #t "So Long, and Thanks for All the Fish...\n")
-               (exit))))))
+               (format #t "I am sorry, but I didn't understand that!\n")
+               (loop rid))
+            
+              ((eq? response 'search)
+               (display-objects objectdb rid)
+               (loop rid))
+            
+              ((eq? response 'pick)
+               (pickup-item 'room rid input)
+               (loop rid))
+            
+              ((eq? response 'inventory)
+               (display-inventory)
+               (loop rid))
+            
+              ((eq? response 'quit)
+               (format #t "good bye...\n")
+               (exit))
+            
+              ((eq? response 'drop)
+               (pickup-item 'bag rid input)
+               (loop rid)))))))
 
 
-(startgame start)
+(startgame maze)
 
