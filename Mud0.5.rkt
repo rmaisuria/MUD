@@ -183,7 +183,7 @@
 
 (define objectdb (make-hash)) 
 (define inventorydb (make-hash)) 
-(define rooms (make-hash))
+;(define rooms (make-hash))
 (define m (build-maze X Y)) 
 (define key "")
 
@@ -248,7 +248,14 @@
 
  
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(define m (build-maze X Y))
+(random-allocator rooms room-type 100)       
+(random-allocator objectdb objects 50)     
+(random-key-location objectdb keys)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(define (startpoint)
+  (let*((start_x (random X))
+        (start_y (random Y)))
+  (list start_x start_y)))
 
 
 (define (look room input)
