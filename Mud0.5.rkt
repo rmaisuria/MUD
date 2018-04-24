@@ -9,9 +9,24 @@
 (define X 10)
 (define Y 7)
 
+(define room-type '((0 "Entrance")
+                    (1 "sand room")
+                    (2 "pebble stones room")
+                    (3 "medival zone")
+                    (4 "street" )
+                    (5 "garden")
+                    (6 "computer room" )
+                    (7 "exit" )))
+
+
 (define objects '((0 "a silver dagger")
                   (1 "a gold coin")
-                  (2 "a long sword")))
+                  (2 "a long sword")
+                  (3 "a diamond")
+                  (4 "a magic potion")
+                  (5 "a fishing rod")
+                  (6 "a maraca")))
+
 
 (define descriptions '((1 "You are in the castle entrance, you see the toilets to the west and kitchen to the east and castle hallway to the north")
                        (2 "You are in the castle toilets, you see the entrance to your west. ")
@@ -21,31 +36,34 @@
                        (6 "You are in the castle dining room, you see the living room to your west and games room to your north")
                        (7 "You are in the games room, you see the dining room to your south and living room to your west")))
 
-(define look '(((directions) look) ((look) look) ((examine room) look)))
+(define search '(((directions) search) ((look) search)((search) search) ((examine room) search)))
 (define quit '(((exit game) quit) ((quit game) quit) ((exit) quit) ((quit) quit)))
-(define actions `(,@look ,@quit))
- 
-                        ;Decision table actions for entering rooms, allows user to choose between which direction you can move in and back
-(define decisiontable `((1 ((up) 4) ((right) 2) ((left) 3) ,@actions)
-                        (2 ((left) 1) ,@actions)
-                        (3 ((left) 1),@actions)
-                        (4 ((up) 5) ((down) 1),@actions)
-                        (5 ((down) 4) ((right) 6),@actions)
-                        (6 ((left) 5) ((up) 7),@actions)
-                        (7 ((down) 6) ((left) 5),@actions)
-                        (8 ((up) 2) ((left) 4),@actions)))
+(define pick '(((get) pick ) ((pickup) pick) ((pick) pick)))
+(define directions '(((down) direction) ((up) direction) ((left) direction) ((right) direction)))
+(define put '(((put) drop) ((drop) drop) ((place) drop) ((remove) drop)))
+(define inventory '(((inventory) inventory) ((bag) inventory)))
+(define actions `(,@search ,@quit ,@pick ,@put ,@inventory,@directions))
 
-( define room-type '( (0 " Entrance ")
-                      (1 " hall ")
-                      (2 " hallway ")
-                      (3 " corridor ")
-                      (4 " lobby " )
-                      (5 " hallway ")
-                      (6 " court " )
-                      (7 " pass " )))
+
+(define decisiontable `((1 ,@actions)
+                        (2 ((down) 1) ,@actions )
+                        (3 ,@actions)))
+
+
 
  (define (slist->string l)
   (string-join (map symbol->string l)))
+
+( define ( assq-ref assqlist id )
+   ( cadr ( assq id assqlist )))
+( define rooms ( make-hash ))
+( define ( room-allocator db types )
+   ( for (( j X ))
+      ( for (( i Y ))
+         ( hash-set! db ( list j i) ( assq-ref types ( random (- ( length types ) 1)))))))
+( room-allocator rooms room-type )
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ( struct maze ( N M tbl ))
  (define ( connections tbl c) ( dict-ref tbl c '()))
@@ -162,67 +180,114 @@
 
 (define (display-inventory)
   (display-objects inventorydb 'bag))
+
+;;;;;;;;;;;;;;;;key functions;;;;;;;;;;;;;;;;;;
+(define (ass-ref assqlist id x)
+  (cdr (x id assqlist)))
+
+
+(define (random-allocator db types rate)
+  (for ((j X))
+    (for ((i Y))
+      (cond ((<= (random 100) rate)
+             (cond((equal? db rooms) 
+                   (hash-set! db (list j i) (car( ass-ref types (random (- (length types) 1)) assq))))
+                  (else 
+                   (add-object db (list j i) (car (ass-ref types (random (- (length types) 1)) assq))))))))))
+
+
+(define (random-key-location db types)
+  (for ((i (length types)))
+    (add-object db (list (random X) (random Y)) (car (ass-ref types i assq)))))
+
+
+(define (get-keywords id)
+  (let ((keys (ass-ref decisiontable id assq)))
+    (map (lambda (key) (car key)) keys)))
+
+(define (list-of-lengths keylist tokens)
+  (map 
+   (lambda (x)
+     (let ((set (lset-intersection eq? tokens x)))
+       (* (/ (length set) (length x)) (length set))))
+   keylist))
+
+(define (index-of-largest-number list-of-numbers)
+  (let ((n (car (sort list-of-numbers >))))
+    (if (zero? n)
+        #f
+        (list-index (lambda (x) (eq? x n)) list-of-numbers))))
+
+(define (lookup id tokens func)
+  (let* ((record (ass-ref decisiontable 1 assv))
+         (keylist (get-keywords 1))
+         (index (index-of-largest-number (list-of-lengths keylist tokens)))) 
+    (if index 
+        (func (list-ref record index)) 
+        #f)))
+
+(define (door key)
+  (printf "You can see the exit gate, but it is locked. \n")
+  (cond ((hash-has-key? inventorydb 'bag)
+         (let* ((record (hash-ref inventorydb 'bag)) 
+                (result (remove (lambda (x) (string-suffix-ci? key x)) record)) 
+                (item (lset-difference equal? record result))) 
+           (cond ((null? item)
+               #t))))
+        (else
+         #f)))
+
  
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define m (build-maze X Y))
 
 
+(define (look room input)
+               (cond [(eq? input 'down)
+                      (move-x room +)]
+                     [(eq? input 'up)
+                      (move-x room -)]
+                     [(eq? input 'left)
+                      (move-y room -)]
+                     [(eq? input 'right)
+                      (move-y room +)]))
 
+(define (move-x room fun)
+  (cons (car room) (map (lambda(x) (fun x 1)) (cdr room))))
 
+(define (move-y room fun)
+  (cons (fun (car room) 1) (cdr room)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-( define ( move-x room fun )
-   ( cons ( car room ) ( map ( lambda ( x) ( fun x 1)) ( cdr room ))))
-( define ( move-y room fun )
-   ( cons ( fun ( car room ) 1) ( cdr room )))
-
-( define ( lookup room direction )
-   ( cond [( eq? direction ' down )
-           ( move-x room +)]
-          [( eq? direction ' up )
-           ( move-x room -)]
-          [( eq? direction ' left )
-           ( move-y room -)]
-          [( eq? direction ' right )
-           ( move-y room +)]))
-
-
-( define ( startgame room-id )
-   ( let loop (( rid room-id ))
-      ( show-maze m rid )
-      ( printf " You are in the ~a\n > "( hash-ref rooms rid ))
-      
-      ( let (( input ( read-line )))
-         ( cond [( eq? input 'quit )
-                 ( exit )])
-         ( cond [( eq? input 'pick )
-                 ( pickup-item rid input )])
-         ( if ( member input ( paths rid ))
-              ( let (( direction ( lookup rid input )))
-                 ( cond (( equal? rid direction ) ( loop rid ))
-                        (( equal? direction ( list (- X 1)(- Y 1)))
-                         ( show-maze m direction )
-                         ( displayln " You have reached exit door .")
-                         ( exit ))
-                        
-                        ( else
-                          ( loop direction ))))
-              ( begin
-                 ( printf " huh? I didn â€™t  huh? I didn â€™t understand : ~a\n " input)
-                 ( loop rid ))))))
-
-
-
-
-( define ( assq-ref assqlist id )
-   ( cadr ( assq id assqlist )))
-( define rooms ( make-hash ))
-( define ( room-allocator db types )
-   ( for (( j X ))
-      ( for (( i Y ))
-         ( hash-set! db ( list j i) ( assq-ref types ( random (- ( length types ) 1)))))))
-( room-allocator rooms room-type )
-
+(define (startgame room-id)
+  (let* ((key (car (ass-ref keys (random(length keys)) assq)))
+         (X(random X))
+         (Y(random Y))
+         (room-id (startpoint)))
+  
+  (let loop ((id room-id) (description #t))
+    (if description
+       (printf "~a\n> " (get-response id))
+        (printf "> "))
+    (let* ((input (read-line))
+          (string-tokens (string-tokenize input))
+           (tokens (map string->symbol string-tokens)))
+      (let ((response (lookup id tokens)))
+        (cond ((number? response)
+               (loop response #t))
+              
+              ((eq? #f response)
+              (format #t "huh? I didn't understand that!\n")
+               (loop id #f))
+             
+              ((eq? response 'look)
+               (get-directions id)
+              (loop id #f))
+              
+              (eq? response 'quit)
+               (format #t "So Long, and Thanks for All the Fish...\n")
+               (exit))))))
 
 
 (startgame start)
