@@ -54,7 +54,16 @@
    ( dict-set! tbl n ( cons c ( connections tbl n ))))
 ( define ( connected? tbl a b) ( member a ( connections tbl b )))
 
--
+( define ( paths start )
+   ( match-define ( maze X Y tbl ) m)
+   ( map ( lambda ( x)
+            ( let (( first ( map = start x ))
+                   ( second ( map < start x )))
+               ( cond [( car first )
+                      ( if ( cadr second ) ' down ' up )]
+                      [ else
+                        ( if ( car second ) ' right ' left )]) ))
+         ( connections tbl start )))
 
 ( define ( build-maze N M)
    ( define tbl ( make-hash ))
@@ -69,7 +78,25 @@
          ( move-to-cell n )))
    ( maze N M tbl ))
 
-
+(define (show-maze m pos )
+  (match-define (maze X Y tbl) m)
+  (for ([i X]) (display "+---"))
+  (displayln "+")
+  (for ([j Y])
+     (display "|")
+     (for ([ i (- X 0)])
+        (if ( equal? ( list i j ) pos )
+             ( display " *")
+             ( display "  " ))
+        (if ( connected? tbl ( list i j ) ( list (+ 1 i) j ))
+             ( display "  " )
+             ( display " |" )))
+     (newline )
+     (for ([i X])
+        (if ( connected? tbl ( list i j ) ( list i (+ j 1)))
+             (display "+   ")
+             (display "+---" )))
+     (displayln "+" )))
 
 
 (define start '(0 0))
@@ -81,6 +108,7 @@
            ( hash-set! db id ( cons object record )))
         ( hash-set! db id ( cons object empty ))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;object functions
 (define ( add-objects db )
   (for-each
    (lambda (r)
@@ -102,6 +130,11 @@
              (printf "Your bag is empty! \n")
              (printf "The room is empty! \n")))))
 
+(define (evaluate a b id)
+  (cond ((eq? a b)
+       'bag)
+        (else
+         id)))
 
 (define (remove-object-from-inventory db id from input)
   (let*((str (string-join (cdr (string-split input)))) 
@@ -121,41 +154,28 @@
                      (printf "Removed ~a from your bag . \n" (first item))
                      (add-object objectdb id (first item))
                      (hash-set! db 'bag result)))))))))
- 
 
+(define (pickup-item from id input)
+  (if(eq? from 'bag)
+    (remove-object-from-inventory inventorydb id 'bag input)
+    (remove-object-from-inventory objectdb id 'room input)))
+
+(define (display-inventory)
+  (display-objects inventorydb 'bag))
+ 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define m (build-maze X Y))
 
-( define ( paths start )
-   ( match-define ( maze X Y tbl ) m)
-   ( map ( lambda ( x)
-            ( let (( first ( map = start x ))
-                   ( second ( map < start x )))
-               ( cond [( car first )
-                      ( if ( cadr second ) ' down ' up )]
-                      [ else
-                        ( if ( car second ) ' right ' left )]) ))
-         ( connections tbl start )))
 
-(define (find-path m p1 p2)
-  (match-define (maze N M tbl) m)
-  (define (alternatives p prev) (remove prev (connections tbl p)))
-  (define (dead-end? p prev) (empty? (alternatives p prev)))
-  (define ((next-turn route) p)
-    (define prev (car route))
-    (cond
-      [(equal? p p2) (cons p2 route)]
-      [(dead-end? p prev) '()]
-      [else (append-map (next-turn (cons p route)) 
-                        (alternatives p prev))])) 
-  (reverse 
-   (append-map (next-turn (list p1)) 
-               (alternatives p1 (list p1)))))
+
+
 
 
 ( define ( move-x room fun )
    ( cons ( car room ) ( map ( lambda ( x) ( fun x 1)) ( cdr room ))))
 ( define ( move-y room fun )
    ( cons ( fun ( car room ) 1) ( cdr room )))
+
 ( define ( lookup room direction )
    ( cond [( eq? direction ' down )
            ( move-x room +)]
@@ -165,11 +185,6 @@
            ( move-y room -)]
           [( eq? direction ' right )
            ( move-y room +)]))
-
-(define (pickup-item from id input)
-  (if(eq? from 'bag)
-    (remove-object-from-inventory inventorydb id 'bag input)
-    (remove-object-from-inventory objectdb id 'room input)))
 
 
 ( define ( startgame room-id )
@@ -182,11 +197,6 @@
                  ( exit )])
          ( cond [( eq? input 'pick )
                  ( pickup-item rid input )])
-               
-        
-               
-         
-         
          ( if ( member input ( paths rid ))
               ( let (( direction ( lookup rid input )))
                  ( cond (( equal? rid direction ) ( loop rid ))
@@ -213,25 +223,7 @@
          ( hash-set! db ( list j i) ( assq-ref types ( random (- ( length types ) 1)))))))
 ( room-allocator rooms room-type )
 
-(define (show-maze m pos )
-  (match-define (maze X Y tbl) m)
-  (for ([i X]) (display "+---"))
-  (displayln "+")
-  (for ([j Y])
-     (display "|")
-     (for ([ i (- X 0)])
-        (if ( equal? ( list i j ) pos )
-             ( display " *")
-             ( display "  " ))
-        (if ( connected? tbl ( list i j ) ( list (+ 1 i) j ))
-             ( display "  " )
-             ( display " |" )))
-     (newline )
-     (for ([i X])
-        (if ( connected? tbl ( list i j ) ( list i (+ j 1)))
-             (display "+   ")
-             (display "+---" )))
-     (displayln "+" )))
+
 
 (startgame start)
 
