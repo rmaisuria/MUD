@@ -14,13 +14,14 @@
 (define pick '(((get) pick ) ((pickup) pick) ((pick) pick)))
 (define directions '(((down) direction) ((up) direction) ((left) direction) ((right) direction)))
 (define put '(((put) drop) ((drop) drop) ((place) drop) ((remove) drop)))
-(define inventory '(((inventory) inventory) ((bag) inventory)))
-(define actions `(,@search ,@quit ,@pick ,@put ,@inventory,@directions))
+(define inventory '(((inventory) inventory) ((bag) inventory)((inventory)rucksack)))
+(define help '(((help)help)))
+(define actions `(,@search ,@quit ,@pick ,@put ,@inventory,@directions,@help))
 
 
-(define decisiontable `((1 ,@actions)
-                        (2 ((down) 1) ,@actions )
-                        (3 ,@actions)))
+(define decisiontable `((1 (@actions))
+                        (2 (@actions )
+                        (3 (@actions)))))
 
 (define room-type '((0 "Entrance")
                     (1 "sand room")
@@ -40,10 +41,10 @@
                   (5 "a fishing rod")
                   (6 "a maraca")))
 
-(define keys '((0 "a crow bar")
-               (1 "a car key")
-               (2 "a house key")
-               (3 "an exit key")))
+(define Heros '((0 "Batman")
+               (1 "Superman")
+               (2 "Black Panther")
+               (3 "Ironman")))
 
 (define (paths start)
   (match-define (maze N M tbl) m)
@@ -58,12 +59,9 @@
                                 
 (struct maze (N NM tbl))
 (define (connections tbl c) (dict-ref tbl c '()))
-
-
 (define (connect! tbl c n)
   (dict-set! tbl c (cons n (connections tbl c)))
   (dict-set! tbl n (cons c (connections tbl n))))
-
 (define (connected? tbl a b) (member a (connections tbl b)))
 
 ;;;;;;;;;;;;;;;;
@@ -143,13 +141,13 @@
   (cond ((hash-has-key? db id)
          (let* ((record (hash-ref db id))
                 (output (string-join record " and ")))
-           (cond ((not(equal? output ""))
+           (cond ((not(equal? output "you cant see anything"))
                        (if (eq? id 'bag)
                            (printf "You are carrying ~a. \n" output)
-                           (printf "You can see ~a. \n" output))))))
+                           (printf "You can see ~a \n" output))))))
         (else
          (if (eq? id 'bag)
-             (printf "Your bag is empty! \n")
+             (printf "Your inventory is empty! \n")
              (printf "The room is empty! \n")))))
 
 (define (evaluate a b id)
@@ -177,8 +175,9 @@
                      (add-object objectdb id (first item))
                      (hash-set! db 'bag result)))))))))
 
-(define (pickup-item from id input)
-  (if(eq? from 'bag)
+
+(define (pick-drop-item from id input)
+ (if(eq? from 'bag)
     (remove-object-from-inventory inventorydb id 'bag input)
     (remove-object-from-inventory objectdb id 'room input)))
 
@@ -192,7 +191,7 @@
 (define inventorydb (make-hash)) 
 (define rooms (make-hash))
 (define m (build-maze X Y)) 
-(define key "")
+(define hero "")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -216,8 +215,8 @@
 
 
 (define (get-keywords id)
-  (let ((keys (ass-ref decisiontable id assq)))
-    (map (lambda (key) (car key)) keys)))
+  (let ((Heros (ass-ref decisiontable id assq)))
+    (map (lambda (key) (car key)) Heros)))
 
 (define (list-of-lengths keylist tokens)
   (map 
@@ -240,11 +239,11 @@
         (func (list-ref record index)) 
         #f)))
 
-(define (door key)
+(define (exit hero)
   (printf "You can see the exit gate, but it is locked. \n")
   (cond ((hash-has-key? inventorydb 'bag)
          (let* ((record (hash-ref inventorydb 'bag)) 
-                (result (remove (lambda (x) (string-suffix-ci? key x)) record)) 
+                (result (remove (lambda (x) (string-suffix-ci? hero x)) record)) 
                 (item (lset-difference equal? record result))) 
            (cond ((null? item)
                #t))))
@@ -253,7 +252,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (random-allocator rooms room-type 100)       
 (random-allocator objectdb objects 50)     
-(random-key-location objectdb keys)
+(random-key-location objectdb Heros)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (define (startpoint)
   (let*((start_x (random X))
@@ -263,7 +262,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;main loop;;;;;;;;;;;;;;;;;;;;
 (define (startgame room-id)
-  (let* ((key (car (ass-ref keys (random(length keys)) assq)))
+  (printf "***welcome to the crystal maze*** \n>")
+  (printf "In order to play this game use the UP, DOWN, LEFT AND RIGHT inputs\n>")
+  (let* ((hero (car (ass-ref Heros (random(length Heros)) assq)))
          (X(random X))
          (Y(random Y))
          (room-id (startpoint)))
@@ -280,11 +281,11 @@
                       (newlocation (look rid direction))) 
                  (cond((member direction (paths rid)) 
                        (cond ((equal? newlocation (list (- X 1)(- Y 1)))
-                              (cond ((not (door key))
-                                     (printf "It seems that you don't have the key to open the gate. \n")
+                              (cond ((not (exit hero))
+                                     (printf "It seems that you have not collected any heros to break down the door.. \n")
                                      (loop newlocation))
                                     (else
-                                     (printf "You used the key to open the gate. You are free! \n")
+                                     (printf "the hero broke the door down for you, you exit \n")
                                      (exit))))
                          (else
                           (loop newlocation))))
@@ -302,7 +303,12 @@
                (loop rid))
             
               ((eq? response 'pick)
-               (pickup-item 'room rid input)
+               (pick-drop-item 'room rid input)
+               (loop rid))
+
+              ((eq? response 'help)
+               (printf "Use the 'Pick 'Drop 'Search 'Inventory
+                   and 'Quit Functions to control the game. \n>")
                (loop rid))
             
               ((eq? response 'inventory)
@@ -314,7 +320,7 @@
                (exit))
             
               ((eq? response 'drop)
-               (pickup-item 'bag rid input)
+               (pick-drop-item 'bag rid input)
                (loop rid)))))))
 
 
